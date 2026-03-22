@@ -19,6 +19,7 @@ export type Message = {
   text?: string
   type: "text" | "image" | "voice" | "video"
   mediaUrl?: string
+  duration?: number
   time: string
   status: "sent" | "delivered" | "read"
 }
@@ -111,13 +112,12 @@ export default function ChatPage() {
     if (isMobile) setShowSidebar(false)
   }
 
-  const handleSendMessage = (text: string) => {
-    if (!selectedContact || !text.trim()) return
+  const handleSendMessage = (msg: Omit<Message, "id" | "fromMe" | "time" | "status">) => {
+    if (!selectedContact) return
     const newMsg: Message = {
       id: `m${Date.now()}`,
       fromMe: true,
-      text,
-      type: "text",
+      ...msg,
       time: new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }),
       status: "sent",
     }
@@ -153,6 +153,7 @@ export default function ChatPage() {
             onSend={handleSendMessage}
             onBack={() => setShowSidebar(true)}
           />
+
         ) : (
           <div className="flex-1 flex items-center justify-center text-purple-300/50 text-lg">
             Выберите чат для начала общения

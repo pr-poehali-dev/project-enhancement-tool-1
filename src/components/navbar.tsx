@@ -2,10 +2,12 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/contexts/AuthContext"
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-[9999] bg-black/95 backdrop-blur-md border-b border-purple-500/20">
@@ -31,8 +33,21 @@ export function Navbar() {
             </div>
           </div>
 
-          <div className="hidden md:block">
-            <Button onClick={() => navigate("/auth")} className="bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">Присоединиться</Button>
+          <div className="hidden md:flex items-center gap-3">
+            {user ? (
+              <Button onClick={() => navigate("/chat")} className="bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">
+                Открыть чаты
+              </Button>
+            ) : (
+              <>
+                <Button onClick={() => navigate("/auth")} variant="ghost" className="text-white hover:text-purple-400 hover:bg-purple-500/10 font-geist border-0">
+                  Войти
+                </Button>
+                <Button onClick={() => navigate("/auth")} className="bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">
+                  Присоединиться
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="md:hidden">
@@ -48,31 +63,30 @@ export function Navbar() {
         {isOpen && (
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 bg-black/98 border-t border-purple-500/20">
-              <a
-                href="#features"
-                className="block px-3 py-2 font-geist text-white hover:text-purple-400 transition-colors duration-200"
-                onClick={() => setIsOpen(false)}
-              >
+              <a href="#features" className="block px-3 py-2 font-geist text-white hover:text-purple-400 transition-colors duration-200" onClick={() => setIsOpen(false)}>
                 Возможности
               </a>
-              <a
-                href="#safety"
-                className="block px-3 py-2 font-geist text-white hover:text-purple-400 transition-colors duration-200"
-                onClick={() => setIsOpen(false)}
-              >
+              <a href="#safety" className="block px-3 py-2 font-geist text-white hover:text-purple-400 transition-colors duration-200" onClick={() => setIsOpen(false)}>
                 Безопасность
               </a>
-              <a
-                href="#faq"
-                className="block px-3 py-2 font-geist text-white hover:text-purple-400 transition-colors duration-200"
-                onClick={() => setIsOpen(false)}
-              >
+              <a href="#faq" className="block px-3 py-2 font-geist text-white hover:text-purple-400 transition-colors duration-200" onClick={() => setIsOpen(false)}>
                 Вопросы
               </a>
-              <div className="px-3 py-2">
-                <Button onClick={() => navigate("/auth")} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">
-                  Присоединиться
-                </Button>
+              <div className="px-3 py-2 flex flex-col gap-2">
+                {user ? (
+                  <Button onClick={() => { navigate("/chat"); setIsOpen(false) }} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">
+                    Открыть чаты
+                  </Button>
+                ) : (
+                  <>
+                    <Button onClick={() => { navigate("/auth"); setIsOpen(false) }} variant="outline" className="w-full border-purple-500/40 text-white hover:bg-purple-500/10 font-geist">
+                      Войти
+                    </Button>
+                    <Button onClick={() => { navigate("/auth"); setIsOpen(false) }} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">
+                      Присоединиться
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>
