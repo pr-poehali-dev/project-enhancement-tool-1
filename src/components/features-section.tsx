@@ -3,51 +3,51 @@ import { Badge } from "@/components/ui/badge"
 
 const features = [
   {
-    title: "Адаптивная нейрообработка",
-    description: "Самооптимизирующиеся алгоритмы, которые обучаются на нейронных паттернах и улучшают интерпретацию сигналов.",
-    icon: "brain",
-    badge: "ИИ",
+    title: "Фото и видео",
+    description: "Делитесь моментами жизни: отправляйте фото и видео в высоком качестве прямо в чат или на свою страницу.",
+    icon: "photo",
+    badge: "Медиа",
   },
   {
-    title: "Медицинская защита",
-    description: "Шифрование по стандартам FDA со сквозной защитой конфиденциальных нейронных данных.",
+    title: "Голосовые сообщения",
+    description: "Записывайте голосовые и видеосообщения — общайтесь живо и естественно, как в реальной жизни.",
+    icon: "mic",
+    badge: "Голос",
+  },
+  {
+    title: "Защита данных",
+    description: "Сквозное шифрование всех сообщений и медиафайлов. Ваши данные принадлежат только вам.",
     icon: "lock",
-    badge: "Сертификат",
+    badge: "Приватность",
   },
   {
-    title: "Интуитивное управление",
-    description: "Естественная трансляция мыслей в действия с откликом менее миллисекунды и точностью 99,7%.",
-    icon: "globe",
-    badge: "Точность",
+    title: "Умные группы",
+    description: "Создавайте группы для друзей, сообществ и интересов. Гибкие настройки приватности для каждой.",
+    icon: "group",
+    badge: "Сообщество",
   },
   {
-    title: "Предиктивная калибровка",
-    description: "ML-модели, которые предугадывают намерения пользователя и оптимизируют нейронные пути.",
+    title: "Мгновенная доставка",
+    description: "Сообщения доставляются в долю секунды. Никаких задержек — общение в режиме реального времени.",
     icon: "zap",
-    badge: "Умный",
+    badge: "Быстро",
   },
   {
-    title: "Биометрическая интеграция",
-    description: "Бесшовная синхронизация с мониторингом жизненных показателей для контроля здоровья.",
-    icon: "link",
-    badge: "Связь",
-  },
-  {
-    title: "Поддержка XR",
-    description: "Нативная совместимость с AR/VR-средами для терапевтических и рабочих приложений.",
-    icon: "target",
-    badge: "XR Ready",
+    title: "Открытая платформа",
+    description: "Регистрация без ограничений. Находите новых друзей и интересных людей по всему миру.",
+    icon: "globe",
+    badge: "Открытость",
   },
 ]
 
 export function FeaturesSection() {
   return (
-    <section className="py-24 px-6 bg-background">
+    <section id="features" className="py-24 px-6 bg-background">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-foreground mb-4 font-sans">Возможности нового поколения</h2>
+          <h2 className="text-4xl font-bold text-foreground mb-4 font-sans">Всё для живого общения</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Почувствуйте будущее с технологиями, которые переопределяют возможное
+            VibeSpace объединяет всё необходимое для общения с друзьями в одном месте
           </p>
         </div>
 
@@ -61,12 +61,12 @@ export function FeaturesSection() {
               <CardHeader>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-3xl">
-                    {feature.icon === "brain" && "&#129504;"}
-                    {feature.icon === "lock" && "&#128274;"}
-                    {feature.icon === "globe" && "&#127760;"}
-                    {feature.icon === "zap" && "&#9889;"}
-                    {feature.icon === "link" && "&#128279;"}
-                    {feature.icon === "target" && "&#127919;"}
+                    {feature.icon === "photo" && "📸"}
+                    {feature.icon === "mic" && "🎙️"}
+                    {feature.icon === "lock" && "🔒"}
+                    {feature.icon === "group" && "👥"}
+                    {feature.icon === "zap" && "⚡"}
+                    {feature.icon === "globe" && "🌍"}
                   </span>
                   <Badge variant="secondary" className="bg-accent text-accent-foreground">
                     {feature.badge}

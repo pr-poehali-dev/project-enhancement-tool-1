@@ -73,7 +73,7 @@ const Scene = () => {
         float flow = 1.0 - smoothstep(0.0, 0.02, abs(depth - uProgress));
 
         // Red scanning overlay
-        vec3 mask = vec3(dot * flow * 10.0, 0.0, 0.0);
+        vec3 mask = vec3(dot * flow * 3.0, 0.0, dot * flow * 10.0);
 
         // Combine effects
         vec3 final = baseColor.rgb + mask;
@@ -114,8 +114,8 @@ const Scene = () => {
 }
 
 export const Hero3DWebGL = () => {
-  const titleWords = "Synapse AI".split(" ")
-  const subtitle = "Нейроинтерфейсы нового поколения."
+  const titleWords = "Vibe Space".split(" ")
+  const subtitle = "Открытая платформа для общения с защитой ваших данных."
   const [visibleWords, setVisibleWords] = useState(0)
   const [subtitleVisible, setSubtitleVisible] = useState(false)
   const [delays, setDelays] = useState<number[]>([])
