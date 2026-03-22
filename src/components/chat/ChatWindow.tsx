@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,23 +13,32 @@ type Props = {
   onBack: () => void
 }
 
-type RecordingState = "idle" | "recording-voice" | "recording-video"
+type RecordMode = "idle" | "voice" | "video"
+
+function getSupportedMimeType(kinds: string[]): string {
+  for (const mime of kinds) {
+    if (MediaRecorder.isTypeSupported(mime)) return mime
+  }
+  return ""
+}
 
 export function ChatWindow({ contact, messages, onSend, onBack }: Props) {
   const [text, setText] = useState("")
-  const [recording, setRecording] = useState<RecordingState>("idle")
-  const [recordSeconds, setRecordSeconds] = useState(0)
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
-  const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [mode, setMode] = useState<RecordMode>("idle")
+  const [secs, setSecs] = useState(0)
+  const [showAttach, setShowAttach] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const videoPreviewRef = useRef<HTMLVideoElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const videoInputRef = useRef<HTMLInputElement>(null)
+  const fileImgRef = useRef<HTMLInputElement>(null)
+  const fileVidRef = useRef<HTMLInputElement>(null)
+  const videoElRef = useRef<HTMLVideoElement>(null)
+
+  // Refs that live across renders without causing re-renders
+  const mrRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const secsRef = useRef(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -38,119 +47,152 @@ export function ChatWindow({ contact, messages, onSend, onBack }: Props) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
-      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current?.getTracks().forEach(t => t.stop())
     }
   }, [])
 
   const startTimer = () => {
-    setRecordSeconds(0)
-    timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000)
+    secsRef.current = 0
+    setSecs(0)
+    timerRef.current = setInterval(() => {
+      secsRef.current += 1
+      setSecs(secsRef.current)
+    }, 1000)
   }
 
   const stopTimer = () => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
   }
 
-  const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
+  const fmt = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
 
-  // — Voice recording —
-  const startVoiceRecording = useCallback(async () => {
+  // ── Voice ──────────────────────────────────────────────
+  const startVoice = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       chunksRef.current = []
-      const mr = new MediaRecorder(stream)
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+
+      const mime = getSupportedMimeType(["audio/webm;codecs=opus", "audio/webm", "audio/ogg", "audio/mp4", ""])
+      const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+
+      mr.ondataavailable = e => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data) }
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" })
         const url = URL.createObjectURL(blob)
-        onSend({ type: "voice", mediaUrl: url, duration: recordSeconds })
-        stream.getTracks().forEach((t) => t.stop())
+        onSend({ type: "voice", mediaUrl: url, duration: secsRef.current })
+        stream.getTracks().forEach(t => t.stop())
         streamRef.current = null
       }
-      mr.start()
-      mediaRecorderRef.current = mr
-      setRecording("recording-voice")
+
+      mr.start(100) // collect chunks every 100ms
+      mrRef.current = mr
+      setMode("voice")
       startTimer()
     } catch {
-      alert("Нет доступа к микрофону")
+      alert("Нет доступа к микрофону. Разрешите доступ в настройках браузера.")
     }
-  }, [onSend, recordSeconds])
-
-  const stopVoiceRecording = useCallback(() => {
-    mediaRecorderRef.current?.stop()
-    stopTimer()
-    setRecording("idle")
-  }, [])
-
-  // — Video message recording —
-  const startVideoRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      streamRef.current = stream
-      chunksRef.current = []
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = stream
-        videoPreviewRef.current.play()
-      }
-      const mr = new MediaRecorder(stream)
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" })
-        const url = URL.createObjectURL(blob)
-        onSend({ type: "video", mediaUrl: url })
-        stream.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-        setVideoPreviewUrl(null)
-      }
-      mr.start()
-      mediaRecorderRef.current = mr
-      setRecording("recording-video")
-      setVideoPreviewUrl("live")
-      startTimer()
-    } catch {
-      alert("Нет доступа к камере")
-    }
-  }, [onSend])
-
-  const stopVideoRecording = useCallback(() => {
-    mediaRecorderRef.current?.stop()
-    stopTimer()
-    setRecording("idle")
-  }, [])
-
-  const cancelRecording = useCallback(() => {
-    mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop())
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    stopTimer()
-    setRecording("idle")
-    setVideoPreviewUrl(null)
-    chunksRef.current = []
-  }, [])
-
-  // — File sending —
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video") => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const url = URL.createObjectURL(file)
-    onSend({ type, mediaUrl: url })
-    e.target.value = ""
-    setShowAttachMenu(false)
   }
 
-  const handleSendText = () => {
+  const stopVoice = () => {
+    if (mrRef.current?.state === "recording") mrRef.current.stop()
+    stopTimer()
+    setMode("idle")
+  }
+
+  const cancelVoice = () => {
+    if (mrRef.current?.state === "recording") {
+      mrRef.current.onstop = null // prevent send
+      mrRef.current.stop()
+    }
+    stopTimer()
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+    setMode("idle")
+  }
+
+  // ── Video message ──────────────────────────────────────
+  const startVideo = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true })
+      streamRef.current = stream
+      chunksRef.current = []
+
+      // attach stream to video element AFTER state update renders it
+      setMode("video")
+      // use setTimeout to wait for DOM
+      setTimeout(() => {
+        if (videoElRef.current) {
+          videoElRef.current.srcObject = stream
+          videoElRef.current.play().catch(() => {})
+        }
+      }, 50)
+
+      const mime = getSupportedMimeType(["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4", ""])
+      const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+
+      mr.ondataavailable = e => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data) }
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "video/webm" })
+        const url = URL.createObjectURL(blob)
+        onSend({ type: "video", mediaUrl: url })
+        stream.getTracks().forEach(t => t.stop())
+        streamRef.current = null
+      }
+
+      mr.start(100)
+      mrRef.current = mr
+      startTimer()
+    } catch {
+      setMode("idle")
+      alert("Нет доступа к камере. Разрешите доступ в настройках браузера.")
+    }
+  }
+
+  const stopVideo = () => {
+    if (mrRef.current?.state === "recording") mrRef.current.stop()
+    if (videoElRef.current) { videoElRef.current.srcObject = null }
+    stopTimer()
+    setMode("idle")
+  }
+
+  const cancelVideo = () => {
+    if (mrRef.current?.state === "recording") {
+      mrRef.current.onstop = null
+      mrRef.current.stop()
+    }
+    if (videoElRef.current) { videoElRef.current.srcObject = null }
+    stopTimer()
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+    setMode("idle")
+  }
+
+  // ── Files ──────────────────────────────────────────────
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video") => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    onSend({ type, mediaUrl: URL.createObjectURL(file) })
+    e.target.value = ""
+    setShowAttach(false)
+  }
+
+  const handleSend = () => {
     if (!text.trim()) return
     onSend({ type: "text", text: text.trim() })
     setText("")
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendText() }
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
   return (
     <div className="flex flex-col h-full bg-[#0d0d14]">
-      {/* Header */}
+
+      {/* ── Header ─────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-purple-500/10 bg-[#12101c]">
         <button onClick={onBack} className="md:hidden text-purple-400 hover:text-purple-300 mr-1">
           <Icon name="ChevronLeft" size={24} />
@@ -159,7 +201,7 @@ export function ChatWindow({ contact, messages, onSend, onBack }: Props) {
           <Avatar className="w-10 h-10">
             <AvatarImage src={contact.avatar} alt={contact.name} />
             <AvatarFallback className="bg-purple-700 text-white text-sm">
-              {contact.name.split(" ").map((n) => n[0]).join("")}
+              {contact.name.split(" ").map(n => n[0]).join("")}
             </AvatarFallback>
           </Avatar>
           {contact.online && (
@@ -180,103 +222,124 @@ export function ChatWindow({ contact, messages, onSend, onBack }: Props) {
         </div>
       </div>
 
-      {/* Messages */}
+      {/* ── Messages ───────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="flex items-center justify-center my-3">
+        <div className="flex justify-center my-3">
           <span className="text-xs text-purple-300/40 bg-purple-500/10 px-3 py-1 rounded-full">Сегодня</span>
         </div>
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+        {messages.map(msg => <MessageBubble key={msg.id} message={msg} />)}
         <div ref={bottomRef} />
       </div>
 
-      {/* Video preview while recording */}
-      {recording === "recording-video" && (
+      {/* ── Video preview ──────────────────────────────── */}
+      {mode === "video" && (
         <div className="mx-4 mb-2 rounded-2xl overflow-hidden border border-purple-500/30 relative bg-black">
-          <video ref={videoPreviewRef} className="w-full max-h-48 object-cover" muted playsInline />
-          <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2 py-0.5">
+          <video
+            ref={videoElRef}
+            className="w-full max-h-52 object-cover"
+            muted
+            playsInline
+            autoPlay
+          />
+          <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/70 rounded-full px-2.5 py-1">
             <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-white text-xs font-mono">{formatTime(recordSeconds)}</span>
+            <span className="text-white text-xs font-mono font-bold">{fmt(secs)}</span>
+          </div>
+          <div className="absolute top-2 right-2 flex gap-2">
+            <button onClick={cancelVideo} className="bg-black/70 hover:bg-black/90 text-white rounded-full p-1.5 transition-colors">
+              <Icon name="X" size={16} />
+            </button>
+            <button onClick={stopVideo} className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 transition-colors">
+              <Icon name="Square" size={16} />
+            </button>
           </div>
         </div>
       )}
 
-      {/* Input area */}
+      {/* ── Input area ─────────────────────────────────── */}
       <div className="px-4 py-3 border-t border-purple-500/10 bg-[#12101c]">
 
-        {/* Recording voice UI */}
-        {recording === "recording-voice" && (
-          <div className="flex items-center gap-3 mb-2 px-2">
-            <button onClick={cancelRecording} className="text-red-400 hover:text-red-300 transition-colors">
-              <Icon name="X" size={20} />
+        {/* Voice recording bar */}
+        {mode === "voice" && (
+          <div className="flex items-center gap-3">
+            <button onClick={cancelVoice} className="text-red-400 hover:text-red-300 transition-colors flex-shrink-0">
+              <Icon name="Trash2" size={20} />
             </button>
-            <div className="flex-1 flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2 bg-[#1e1a2e] rounded-2xl px-3 py-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
-              <div className="flex-1 flex items-center gap-0.5">
-                {Array.from({ length: 30 }).map((_, i) => (
-                  <div key={i} className="bg-purple-400/50 rounded-full w-0.5 animate-pulse"
-                    style={{ height: `${Math.random() * 18 + 4}px`, animationDelay: `${i * 0.05}s` }} />
+              <div className="flex-1 flex items-end gap-px overflow-hidden h-6">
+                {Array.from({ length: 40 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex-1 bg-purple-400/60 rounded-sm animate-pulse"
+                    style={{
+                      height: `${Math.sin(i * 0.8 + secs) * 40 + 50}%`,
+                      animationDelay: `${i * 0.03}s`,
+                      animationDuration: `${0.6 + (i % 3) * 0.2}s`
+                    }}
+                  />
                 ))}
               </div>
-              <span className="text-purple-300 text-sm font-mono flex-shrink-0">{formatTime(recordSeconds)}</span>
+              <span className="text-purple-300 text-sm font-mono flex-shrink-0">{fmt(secs)}</span>
             </div>
             <button
-              onClick={stopVoiceRecording}
-              className="w-9 h-9 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-white transition-colors"
+              onClick={stopVoice}
+              className="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-white transition-colors flex-shrink-0"
             >
               <Icon name="Send" size={16} />
             </button>
           </div>
         )}
 
-        {recording !== "recording-voice" && (
+        {/* Normal input (also shown during video recording for stop button) */}
+        {mode !== "voice" && (
           <div className="flex items-end gap-2">
-            {/* Attach button */}
+            {/* Attach */}
             <div className="relative flex-shrink-0 mb-0.5">
               <button
-                onClick={() => setShowAttachMenu(!showAttachMenu)}
+                onClick={() => setShowAttach(v => !v)}
                 className="w-9 h-9 rounded-full flex items-center justify-center text-purple-400 hover:bg-purple-500/10 transition-colors"
               >
-                <Icon name={showAttachMenu ? "X" : "Paperclip"} size={18} />
+                <Icon name={showAttach ? "X" : "Paperclip"} size={18} />
               </button>
-              {showAttachMenu && (
-                <div className="absolute bottom-12 left-0 bg-[#1e1a2e] border border-purple-500/20 rounded-2xl p-2 flex flex-col gap-1 shadow-xl z-10 min-w-[160px]">
+
+              {showAttach && (
+                <div className="absolute bottom-12 left-0 bg-[#1e1a2e] border border-purple-500/20 rounded-2xl p-2 shadow-xl z-20 min-w-[170px]">
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-3 px-3 py-2 text-white hover:bg-purple-500/15 rounded-xl transition-colors text-sm"
+                    onClick={() => fileImgRef.current?.click()}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-white hover:bg-purple-500/15 rounded-xl text-sm"
                   >
-                    <Icon name="Image" size={16} className="text-purple-400" />
-                    Фото
+                    <Icon name="Image" size={16} className="text-purple-400" /> Фото из галереи
                   </button>
                   <button
-                    onClick={() => videoInputRef.current?.click()}
-                    className="flex items-center gap-3 px-3 py-2 text-white hover:bg-purple-500/15 rounded-xl transition-colors text-sm"
+                    onClick={() => fileVidRef.current?.click()}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-white hover:bg-purple-500/15 rounded-xl text-sm"
                   >
-                    <Icon name="Film" size={16} className="text-purple-400" />
-                    Видео
+                    <Icon name="Film" size={16} className="text-purple-400" /> Видео из галереи
                   </button>
                   <button
-                    onClick={() => { startVideoRecording(); setShowAttachMenu(false) }}
-                    className="flex items-center gap-3 px-3 py-2 text-white hover:bg-purple-500/15 rounded-xl transition-colors text-sm"
+                    onClick={() => { setShowAttach(false); startVideo() }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-white hover:bg-purple-500/15 rounded-xl text-sm"
                   >
-                    <Icon name="VideoIcon" fallback="Video" size={16} className="text-purple-400" />
-                    Видеосообщение
+                    <Icon name="Camera" size={16} className="text-purple-400" /> Снять видеосообщение
                   </button>
                 </div>
               )}
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, "image")} />
-              <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFileChange(e, "video")} />
+
+              <input ref={fileImgRef} type="file" accept="image/*" className="hidden" onChange={e => handleFile(e, "image")} />
+              <input ref={fileVidRef} type="file" accept="video/*" className="hidden" onChange={e => handleFile(e, "video")} />
             </div>
 
+            {/* Text input */}
             <div className="flex-1 relative">
               <Textarea
                 value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Написать сообщение..."
+                onChange={e => setText(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder={mode === "video" ? "Запись идёт..." : "Написать сообщение..."}
+                disabled={mode === "video"}
                 rows={1}
-                className="resize-none bg-[#1e1a2e] border-purple-500/20 text-white placeholder:text-purple-300/30 focus-visible:ring-purple-500/50 rounded-2xl pr-10 min-h-[44px] max-h-[120px] py-2.5"
+                className="resize-none bg-[#1e1a2e] border-purple-500/20 text-white placeholder:text-purple-300/30 focus-visible:ring-purple-500/50 rounded-2xl pr-10 min-h-[44px] max-h-[120px] py-2.5 disabled:opacity-50"
                 style={{ scrollbarWidth: "none" }}
               />
               <button className="absolute right-3 bottom-2.5 text-purple-400 hover:text-purple-300 transition-colors">
@@ -284,24 +347,25 @@ export function ChatWindow({ contact, messages, onSend, onBack }: Props) {
               </button>
             </div>
 
+            {/* Send / Mic / Stop */}
             <div className="flex-shrink-0 mb-0.5">
-              {text.trim() ? (
-                <Button onClick={handleSendText} className="w-9 h-9 rounded-full p-0 bg-purple-600 hover:bg-purple-700 border-0">
-                  <Icon name="Send" size={16} />
-                </Button>
-              ) : recording === "recording-video" ? (
+              {mode === "video" ? (
                 <button
-                  onClick={stopVideoRecording}
+                  onClick={stopVideo}
                   className="w-9 h-9 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white transition-colors"
+                  title="Остановить и отправить"
                 >
                   <Icon name="Square" size={14} />
                 </button>
+              ) : text.trim() ? (
+                <Button onClick={handleSend} className="w-9 h-9 rounded-full p-0 bg-purple-600 hover:bg-purple-700 border-0">
+                  <Icon name="Send" size={16} />
+                </Button>
               ) : (
                 <button
-                  onMouseDown={startVoiceRecording}
-                  onTouchStart={startVoiceRecording}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-purple-400 hover:bg-purple-500/10 transition-colors"
-                  title="Удержите для записи голосового"
+                  onClick={startVoice}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-purple-400 hover:bg-purple-500/10 active:bg-purple-500/20 transition-colors"
+                  title="Записать голосовое"
                 >
                   <Icon name="Mic" size={18} />
                 </button>
