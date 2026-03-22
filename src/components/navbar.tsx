@@ -32,7 +32,7 @@ export function Navbar() {
           </div>
 
           <div className="hidden md:block">
-            <Button onClick={() => navigate("/chat")} className="bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">Присоединиться</Button>
+            <Button onClick={() => navigate("/auth")} className="bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">Присоединиться</Button>
           </div>
 
           <div className="md:hidden">
@@ -70,7 +70,7 @@ export function Navbar() {
                 Вопросы
               </a>
               <div className="px-3 py-2">
-                <Button onClick={() => navigate("/chat")} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">
+                <Button onClick={() => navigate("/auth")} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-geist border-0">
                   Присоединиться
                 </Button>
               </div>

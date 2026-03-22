@@ -3,6 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import Icon from "@/components/ui/icon"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/contexts/AuthContext"
 import type { Contact } from "@/pages/ChatPage"
 
 type Props = {
@@ -14,10 +15,16 @@ type Props = {
 export function ChatSidebar({ contacts, selectedId, onSelect }: Props) {
   const [search, setSearch] = useState("")
   const navigate = useNavigate()
+  const { user, logout } = useAuth()
 
   const filtered = contacts.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
   )
+
+  const handleLogout = async () => {
+    await logout()
+    navigate("/auth")
+  }
 
   return (
     <div className="flex flex-col w-full h-full bg-[#12101c] border-r border-purple-500/10">
@@ -30,10 +37,35 @@ export function ChatSidebar({ contacts, selectedId, onSelect }: Props) {
           <span className="text-purple-400">←</span>
           Vibe<span className="text-purple-400">Space</span>
         </button>
-        <button className="text-purple-400 hover:text-purple-300 transition-colors">
-          <Icon name="PenSquare" size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="text-purple-400 hover:text-purple-300 transition-colors">
+            <Icon name="PenSquare" size={20} />
+          </button>
+          <button
+            onClick={handleLogout}
+            title="Выйти"
+            className="text-purple-400/60 hover:text-red-400 transition-colors"
+          >
+            <Icon name="LogOut" size={18} />
+          </button>
+        </div>
       </div>
+
+      {/* Current user */}
+      {user && (
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-purple-500/10 bg-purple-500/5">
+          <Avatar className="w-8 h-8">
+            <AvatarImage src={user.avatarUrl || ""} alt={user.displayName} />
+            <AvatarFallback className="bg-purple-700 text-white text-xs">
+              {user.displayName.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-medium truncate">{user.displayName}</p>
+            <p className="text-purple-300/50 text-xs truncate">@{user.username}</p>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="px-4 py-3">
